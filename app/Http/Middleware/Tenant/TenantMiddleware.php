@@ -3,6 +3,7 @@
 namespace App\Http\Middleware\Tenant;
 
 use App\Models\Company;
+use App\Tenant\ManagerTenant;
 use Closure;
 
 class TenantMiddleware
@@ -19,8 +20,10 @@ class TenantMiddleware
 
         $company = $this->getCompany($request->getHost());
         
-        if(!$company){
+        if(!$company && $request->url() != route('404.tentant')){
             return redirect()->route('404.tentant');
+        }else if($request->url() != route('404.tentant')){
+            app(ManagerTenant::class)->setConnection($company);
         }
 
         return $next($request);
