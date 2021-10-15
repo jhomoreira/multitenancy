@@ -1,0 +1,84 @@
+#UTILIZE O ARQUIVO .env PARA CONFIGURAR AS VARIÁVEIS DE AMBIENTE
+version: '3'
+
+services:
+
+  db:
+    image: mysql:5.7
+    container_name: mysql
+    restart: unless-stopped
+    volumes:
+      - ./storage-db:/var/lib/mysql
+      - ./docker-files/mysql/my.cnf:/etc/mysql/my.cnf
+    ports:
+      - ${porta}:3306
+    networks:
+      - webnet
+    expose:
+      - 3306
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: "multitenancy"
+      MYSQL_USER: "multitenancy"
+      MYSQL_PASSWORD: "${pass}"
+
+  app:
+    image: jhomoreira/flanp-core
+    container_name: laravel
+    working_dir: /var/www/api
+    env_file: '.env'
+    environment:
+      - "DB_CONNECTION=mysql"
+      - "DB_HOST=db"
+      - "BD_PORT=3306"
+      - "DB_DATABASE=multitenancy"
+      - "DB_USERNAME=multitenancy"
+      - "DB_PASSWORD=${pass}"
+    volumes:
+      - ../:/var/www/api
+      - ./docker-files/php/:/usr/local/etc/php/conf.d
+    depends_on:
+      - db
+    tty: true
+    networks:
+      - webnet
+
+
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: webserver
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - ../:/var/www/api
+      - ./docker-files/conf.d/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - webnet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webserver.rule=Host(`ws.localhost`)"
+      - "traefik.http.routers.webserver.entrypoints=web"
+
+  traefik:
+    image: traefik:v2.0
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    restart: unless-stopped
+    networks:
+      - webnet
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8085:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  webnet:
+    driver: bridge
